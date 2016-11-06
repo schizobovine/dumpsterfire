@@ -10,22 +10,19 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Bounce2.h>
+//#include <Bounce2.h>
 //#include <Servo.h>
 
 ////////////////////////////////////////////////////////////////////////
 // PIN ASSIGNMENT
 ////////////////////////////////////////////////////////////////////////
 
-#define ENC_A      2
-#define ENC_B      3
-#define SERVO_GO   12
-#define SERVO_PIN  5
-#define ENC_RST    A0
-#define DISP_RST   A3
+//#define SERVO_PIN  5
+#define TRIMPOT    A0
+#define DISP_RST   12
 
-#define ANGLE_MIN 0
-#define ANGLE_MAX 180
+#define ANGLE_MIN 30
+#define ANGLE_MAX 150
 
 ////////////////////////////////////////////////////////////////////////
 // GLOBAL STATE VARIABLES
@@ -34,23 +31,12 @@
 // Display
 Adafruit_SSD1306 display(DISP_RST);
 
-// Buttons
-Bounce butt_reset;
-
 // Servo
-//Servo lifter;
+//Servo srvo;
 
 // Holds the current servo angle
-volatile uint8_t angle = ANGLE_MIN;
-uint8_t old_angle = ANGLE_MAX;
-
-// Servo on/off state via switch
-boolean servo_go = false;
-
-// Encoder variables
-volatile uint8_t reading = 0;
-boolean seen_a = false;
-boolean seen_b = false;
+uint8_t srv_angle = ANGLE_MIN;
+uint8_t old_angle = ANGLE_MIN;
 
 ////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
@@ -59,40 +45,13 @@ boolean seen_b = false;
 void printStatus() {
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println(angle, DEC);
+  display.println(srv_angle, DEC);
   display.display();
 }
 
-////////////////////////////////////////////////////////////////////////
-// INTERRUPT HANDLERS
-////////////////////////////////////////////////////////////////////////
-
-void intr_enc_a() {
-  cli();
-  reading = PIND & 0x0C;
-  if ((reading == 0x0C) && seen_a) {
-    if (angle > ANGLE_MIN)
-      angle--;
-    seen_a = false;
-    seen_b = false;
-  } else if (reading == 0x04) {
-    seen_b = true;
-  }
-  sei();
-}
-
-void intr_enc_b() {
-  cli();
-  reading = PIND & 0x0C;
-  if ((reading == 0x0C) && seen_b) {
-    if (angle < ANGLE_MAX)
-      angle++;
-    seen_a = false;
-    seen_b = false;
-  } else if (reading == 0x08) {
-    seen_a = true;
-  }
-  sei();
+uint8_t readTrimpot() {
+  uint16_t reading = analogRead(TRIMPOT);
+  return map(reading, 0, 1023, ANGLE_MIN, ANGLE_MAX);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -101,34 +60,27 @@ void intr_enc_b() {
 
 void setup() {
 
+  delay(100);
+
   // Setup display
   Wire.begin();
   display.begin(SSD1306_SWITCHCAPVCC, SSD1306_I2C_ADDRESS);
   display.clearDisplay();
   display.setTextColor(WHITE);
   display.setTextSize(2);
-  display.setTextWrap(false);
-  display.println("DUMPSTRFIR");
+  display.setTextWrap(true);
+  display.println(F("DUMPSTER"));
+  display.println(F("  FIRE  "));
   display.display();
-
-  // Configure rotary enccoder pins as inputs
-  pinMode(ENC_A, INPUT_PULLUP);
-  pinMode(ENC_B, INPUT_PULLUP);
-  pinMode(SERVO_GO, INPUT_PULLUP);
-
-  // Configure butt(ons)
-  butt_reset.attach(ENC_RST, INPUT_PULLUP, 10);
+  display.setTextWrap(false);
 
   // Used as servo on status indicator
   //pinMode(LED_BUILTIN, OUTPUT);
   //digitalWrite(LED_BUILTIN, LOW);
 
-  // Configure servo controller
-  //pinMode(SERVO_PIN, OUTPUT);
-
-  // Attach interrupt handlers
-  attachInterrupt(digitalPinToInterrupt(ENC_A), intr_enc_a, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENC_B), intr_enc_b, RISING);
+  // Configure pins
+  pinMode(TRIMPOT, INPUT);
+  //pinMode(SERVO_PIN, INPUT);
 
 }
 
@@ -138,28 +90,16 @@ void setup() {
 
 void loop() {
 
-  butt_reset.update();
-  if (butt_reset.read() == LOW) {
-    angle = 0;
-  }
+  srv_angle = readTrimpot();
 
-  servo_go = (digitalRead(SERVO_GO) == LOW);
-
-  if (!servo_go) {
-    //digitalWrite(LED_BUILTIN, HIGH);
-  } else {
-    //digitalWrite(LED_BUILTIN, LOW);
-    //lifter.attach(SERVO_PIN);
-    //lifter.write(angle);
-    //lifter.detach();
-  }
-
-  if (angle != old_angle) {
-    old_angle = angle;
+  if (srv_angle != old_angle) {
+    old_angle = srv_angle;
     printStatus();
   } else {
     delay(100);
   }
+
+  delay(100);
 
 }
 
